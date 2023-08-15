@@ -4,26 +4,28 @@
 #include <unistd.h>
 #include <cstring>
 #include <pthread.h>
+#include <filesystem>
 
 using namespace std;
 using namespace chrono;
-const int ALLOWED_MEMORY_SIZE = 10000;
-const int THREAD_NUMBER = 4;
+namespace fs = std::filesystem;
 
-int fileNumberCounter = 0;
+const int ALLOWED_MEMORY_SIZE = 100000;
+const int THREAD_NUMBER = 4;
+const string pathToSourceFiles{ "./sourceFiles" };
+const string pathToDestFiles{ "./destFiles" };
+
 pthread_mutex_t lock;
 bool doneFlag = false;
 
-string getNextFileName(int &fileNumberCounter);
+string getNextFileName();
 void *countLines(void *attr);
 
 int main()
 {
-    int timer = duration_cast<milliseconds> (system_clock::now().time_since_epoch()).count();
-    string skeleton;
     int rc;
-
     pthread_t threads[THREAD_NUMBER];
+
     for (int i = 0; i < THREAD_NUMBER; i++) {
         rc = pthread_create(&threads[i], NULL, countLines, NULL);
     }
@@ -31,17 +33,17 @@ int main()
         pthread_join(threads[i], NULL);
     }
 
-    timer = duration_cast<milliseconds> (system_clock::now().time_since_epoch()).count() - timer;
-    cout << fileNumberCounter - 1 << " files were counted in " << timer << "ms" << endl;
     return 0;
 }
 
-string getNextFileName(int &fileNumberCounter)
+string getNextFileName()
 {
-    string skeleton = "test_@@@.txt";
-    fileNumberCounter++;
-    skeleton.replace(skeleton.find("@@@"), 3, to_string(fileNumberCounter));
-    return skeleton;
+    fs::directory_iterator fileListIt;
+
+    while (fs::is_empty(pathToSourceFiles)){};
+
+    fileListIt = fs::directory_iterator(pathToSourceFiles);
+    return fileListIt->path();
 }
 
 void *countLines(void *attr) {
@@ -56,8 +58,13 @@ void *countLines(void *attr) {
         pthread_mutex_unlock(&lock);
         pthread_exit(NULL);
     }
-    string skeleton = getNextFileName(fileNumberCounter);
-    int fileDescriptor = open(skeleton.c_str(), O_SYNC | 0 | O_RDONLY);
+
+    string filePath = getNextFileName();
+    string newFilePath = pathToDestFiles + filePath.substr(filePath.find_last_of('/'));
+    fs::rename(filePath, newFilePath);
+
+    string fileName = filePath.substr(filePath.find_last_of('/')+1);
+    int fileDescriptor = open(fileName.c_str(), O_SYNC | 0 | O_RDONLY);
     if (fileDescriptor == -1) {
         doneFlag = true;
         pthread_mutex_unlock(&lock);
@@ -87,6 +94,8 @@ void *countLines(void *attr) {
 
     count++;
     timer = duration_cast<milliseconds> (system_clock::now().time_since_epoch()).count() - timer;
-    cout << count <<" lines were counted from file " << skeleton << " in " << timer << "ms by thread " << pthread_self() << endl;
+    cout << newFilePath << " has " << count << " lines. Counted in "<< timer << "ms by thread " << pthread_self() << endl;
+
     countLines(NULL);
+    return NULL;
 }
