@@ -71,7 +71,7 @@ void *countLines(void *attr) {
 
     int fileDescriptor = open(newFilePath.c_str(), O_SYNC | 0 | O_RDONLY);
     if (fileDescriptor == -1) {
-        cout << "[ERROR] " << newFilePath << ": Read error" << endl;
+        cout << "[ERROR] " << newFilePath << ": Reading error" << endl;
     }
     pthread_mutex_unlock(&lock);
 
